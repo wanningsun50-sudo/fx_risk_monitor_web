@@ -49,4 +49,59 @@ col_name = df_result.columns[0]
 fig1, ax1 = plt.subplots(figsize=(12, 4))
 ax1.plot(df_result.index, df_result[col_name], label=col_name, color='steelblue')
 ax1.set_title(f"{col_name} 汇率走势")
-ax1.set_x_
+ax1.set_xlabel("日期")
+ax1.set_ylabel("汇率")
+ax1.grid(True)
+ax1.legend()
+st.pyplot(fig1)
+
+# === 图2：波动率趋势 ===
+vol_pct = df_result['volatility']
+n = len(vol_pct)
+win = max(20, min(60, n // 2))
+minp = max(10, win // 2)
+q95 = vol_pct.rolling(window=win, min_periods=minp).quantile(0.95)
+if q95.isna().all():
+    q95 = vol_pct.expanding(min_periods=10).quantile(0.95)
+
+fig2, ax2 = plt.subplots(figsize=(12, 4))
+ax2.plot(df_result.index, vol_pct, label='条件波动率 (%)', color='orange')
+ax2.plot(q95.index, q95.values, '--', label='滚动95%分位', color='red')
+ax2.set_title("USD/CNY 波动率趋势（单位：%）")
+ax2.set_xlabel("日期")
+ax2.set_ylabel("波动率 (%)")
+ax2.legend()
+ax2.grid(True)
+st.pyplot(fig2)
+
+# === 图3：未来预测图 ===
+st.subheader("🔮 未来汇率预测")
+for steps in [5, 15]:
+    st.markdown(f"### 📈 未来 {steps} 天汇率预测")
+
+    prices, upper, lower = forecast_future_prices_rolling(df, steps=steps, alpha=0.05, dist_for_ci="t")
+
+    future_dates = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1),
+                                 periods=prices.shape[0], freq='D')
+
+    mask = np.isfinite(prices) & np.isfinite(upper) & np.isfinite(lower)
+    prices, upper, lower, future_dates = prices[mask], upper[mask], lower[mask], future_dates[mask]
+
+    if prices.size == 0:
+        st.warning(f"⚠️ 预测结果为空，跳过未来 {steps} 天预测。")
+        continue
+
+    fig3, ax3 = plt.subplots(figsize=(10, 5))
+    ax3.plot(future_dates, prices, label='预测中枢', color='blue')
+    ax3.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
+    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
+    for x, y in zip(future_dates, prices):
+        ax3.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
+    ax3.set_title(f"未来 {steps} 天 USD/CNY 逐日滚动预测")
+    ax3.set_xlabel("日期")
+    ax3.set_ylabel("汇率")
+    ax3.legend()
+    ax3.grid(True)
+    st.pyplot(fig3)
+
+
