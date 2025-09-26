@@ -1,9 +1,12 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+
+# ✅ Streamlit 图像后端兼容性修复
+matplotlib.use("agg")
 import matplotlib.pyplot as plt
 import streamlit as st
 import warnings
-import matplotlib
 
 from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
@@ -18,22 +21,25 @@ try:
 except Exception as e:
     st.warning(f"⚠️ 字体设置失败：{e}")
 
-# ✅ Streamlit 页面开始
+# ✅ Streamlit 页面设置
 st.set_page_config(page_title="外汇风险监测", layout="wide")
 st.title("📈 USD/CNY 外汇风险监测系统")
 
-# 加载数据
+# ✅ 加载数据
 df = get_usdcny_last_week()
 if df.empty:
     st.error("❌ 无法获取汇率数据，终止分析。")
     st.stop()
 
+df.index = pd.to_datetime(df.index)  # ✅ 强制保证索引为时间格式
+
 st.info("✅ 汇率数据加载成功，开始计算波动率与风险预警...")
 
-# 计算波动率
+# ✅ 计算波动率
 df_result, warning, latest_vol, threshold = compute_volatility(df)
+df_result.index = pd.to_datetime(df_result.index)  # ✅ 防止图像横轴出错
 
-# 展示当前风险状态
+# ✅ 展示当前风险状态
 st.subheader("📊 当前波动率分析")
 st.write(f"**最新波动率（%）:** `{latest_vol:.4f}`")
 st.write(f"**滚动95%分位阈值（%）:** `{threshold:.4f}`")
@@ -93,12 +99,10 @@ for steps in [5, 15]:
     ax3.plot(future_dates, prices, label='预测中枢', color='blue')
     ax3.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
 
-    # 显示小数
-    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
-
-    # 避免图上文字太多（只显示最多10个点）
+    # 避免文字太多只标注部分
     max_labels = 10
     step = max(1, len(prices) // max_labels)
+    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
     for x, y in zip(future_dates[::step], prices[::step]):
         ax3.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
 
