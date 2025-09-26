@@ -9,8 +9,10 @@ from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
 
 # 中文显示
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
+import matplotlib
+matplotlib.rcParams['font.family'] = 'sans-serif'
+matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']  # ✅ 安全替代 SimHei
+matplotlib.rcParams['axes.unicode_minus'] = False         # 解决负号乱码
 
 def main():
     print("📈 正在获取汇率数据...")
@@ -103,3 +105,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
