@@ -8,11 +8,14 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
 
-# 中文显示
+
 import matplotlib
+import matplotlib.pyplot as plt
+
+# ✅ 推荐字体设置（兼容 Linux 上的 Streamlit Cloud）
 matplotlib.rcParams['font.family'] = 'sans-serif'
-matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']  # ✅ 安全替代 SimHei
-matplotlib.rcParams['axes.unicode_minus'] = False         # 解决负号乱码
+matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']  # 或者 'Arial Unicode MS'
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 def main():
     print("📈 正在获取汇率数据...")
@@ -105,4 +108,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
