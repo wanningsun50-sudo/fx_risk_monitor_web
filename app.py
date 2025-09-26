@@ -1,29 +1,30 @@
 # main/app.py
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 import warnings
 import matplotlib
-import os
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
 
-# ✅ 设置中文字体（部署失败可注释）
+# ✅ 使用系统支持的中文字体（推荐方案 A）
 try:
-    font_path = os.path.join(os.path.dirname(__file__), 'simhei.ttf')
-    matplotlib.rcParams['font.family'] = matplotlib.font_manager.FontProperties(fname=font_path).get_name()
+    matplotlib.rcParams['font.family'] = 'sans-serif'
+    matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Noto Sans CJK SC', 'Arial Unicode MS']
     matplotlib.rcParams['axes.unicode_minus'] = False
-except:
-    st.warning("⚠️ 字体设置失败，可能是部署环境中缺少 simhei.ttf 文件。")
+except Exception as e:
+    st.warning(f"⚠️ 字体设置失败：{e}")
 
 # ✅ Streamlit 页面开始
 st.set_page_config(page_title="外汇风险监测", layout="wide")
 st.title("📈 USD/CNY 外汇风险监测系统")
 
+# 加载数据
 df = get_usdcny_last_week()
 if df.empty:
     st.error("❌ 无法获取汇率数据，终止分析。")
@@ -31,8 +32,10 @@ if df.empty:
 
 st.info("✅ 汇率数据加载成功，开始计算波动率与风险预警...")
 
+# 计算波动率
 df_result, warning, latest_vol, threshold = compute_volatility(df)
 
+# 展示当前风险状态
 st.subheader("📊 当前波动率分析")
 st.write(f"**最新波动率（%）:** `{latest_vol:.4f}`")
 st.write(f"**滚动95%分位阈值（%）:** `{threshold:.4f}`")
