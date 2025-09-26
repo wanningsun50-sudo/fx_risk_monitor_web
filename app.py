@@ -10,7 +10,7 @@ from garch_model import compute_volatility, forecast_future_prices_rolling
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# ✅ 使用兼容 Streamlit Cloud 的中文字体（方案 A）
+# ✅ 使用兼容 Streamlit Cloud 的中文字体
 try:
     matplotlib.rcParams['font.family'] = 'sans-serif'
     matplotlib.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'Microsoft YaHei', 'Arial Unicode MS']
@@ -92,9 +92,16 @@ for steps in [5, 15]:
     fig3, ax3 = plt.subplots(figsize=(10, 5))
     ax3.plot(future_dates, prices, label='预测中枢', color='blue')
     ax3.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
+
+    # 显示小数
     ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
-    for x, y in zip(future_dates, prices):
+
+    # 避免图上文字太多（只显示最多10个点）
+    max_labels = 10
+    step = max(1, len(prices) // max_labels)
+    for x, y in zip(future_dates[::step], prices[::step]):
         ax3.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
+
     ax3.set_title(f"未来 {steps} 天 USD/CNY 逐日滚动预测")
     ax3.set_xlabel("日期")
     ax3.set_ylabel("汇率")
