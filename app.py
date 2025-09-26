@@ -13,15 +13,11 @@ from garch_model import compute_volatility, forecast_future_prices_rolling
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# ✅ 使用兼容 Streamlit Cloud 的中文字体
-try:
-    matplotlib.rcParams['font.family'] = 'sans-serif'
-    matplotlib.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'Microsoft YaHei', 'Arial Unicode MS']
-    matplotlib.rcParams['axes.unicode_minus'] = False
-except Exception as e:
-    st.warning(f"⚠️ 字体设置失败：{e}")
+# ✅ 统一使用 DejaVu Sans，避免找不到中文字体
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+matplotlib.rcParams['axes.unicode_minus'] = False
 
-# ✅ Streamlit 页面设置
+# ✅ 页面设置
 st.set_page_config(page_title="外汇风险监测", layout="wide")
 st.title("📈 USD/CNY 外汇风险监测系统")
 
@@ -31,13 +27,13 @@ if df.empty:
     st.error("❌ 无法获取汇率数据，终止分析。")
     st.stop()
 
-df.index = pd.to_datetime(df.index)  # ✅ 强制保证索引为时间格式
+df.index = pd.to_datetime(df.index)
 
 st.info("✅ 汇率数据加载成功，开始计算波动率与风险预警...")
 
 # ✅ 计算波动率
 df_result, warning, latest_vol, threshold = compute_volatility(df)
-df_result.index = pd.to_datetime(df_result.index)  # ✅ 防止图像横轴出错
+df_result.index = pd.to_datetime(df_result.index)
 
 # ✅ 展示当前风险状态
 st.subheader("📊 当前波动率分析")
@@ -52,9 +48,9 @@ else:
 col_name = df_result.columns[0]
 fig1, ax1 = plt.subplots(figsize=(12, 4))
 ax1.plot(df_result.index, df_result[col_name], label=col_name, color='steelblue')
-ax1.set_title(f"{col_name} 汇率走势")
-ax1.set_xlabel("日期")
-ax1.set_ylabel("汇率")
+ax1.set_title(f"{col_name} 汇率走势", fontsize=12)
+ax1.set_xlabel("日期", fontsize=10)
+ax1.set_ylabel("汇率", fontsize=10)
 ax1.grid(True)
 ax1.legend()
 st.pyplot(fig1)
@@ -71,9 +67,9 @@ if q95.isna().all():
 fig2, ax2 = plt.subplots(figsize=(12, 4))
 ax2.plot(df_result.index, vol_pct, label='条件波动率 (%)', color='orange')
 ax2.plot(q95.index, q95.values, '--', label='滚动95%分位', color='red')
-ax2.set_title("USD/CNY 波动率趋势（单位：%）")
-ax2.set_xlabel("日期")
-ax2.set_ylabel("波动率 (%)")
+ax2.set_title("USD/CNY 波动率趋势（单位：%）", fontsize=12)
+ax2.set_xlabel("日期", fontsize=10)
+ax2.set_ylabel("波动率 (%)", fontsize=10)
 ax2.legend()
 ax2.grid(True)
 st.pyplot(fig2)
@@ -99,16 +95,16 @@ for steps in [5, 15]:
     ax3.plot(future_dates, prices, label='预测中枢', color='blue')
     ax3.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
 
-    # 避免文字太多只标注部分
+    # 控制标签数量，避免遮挡
     max_labels = 10
     step = max(1, len(prices) // max_labels)
     ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
     for x, y in zip(future_dates[::step], prices[::step]):
-        ax3.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
+        ax3.text(x, y, f"{y:.4f}", fontsize=9, ha='center', va='bottom', color='blue')
 
-    ax3.set_title(f"未来 {steps} 天 USD/CNY 逐日滚动预测")
-    ax3.set_xlabel("日期")
-    ax3.set_ylabel("汇率")
+    ax3.set_title(f"未来 {steps} 天 USD/CNY 逐日滚动预测", fontsize=12)
+    ax3.set_xlabel("日期", fontsize=10)
+    ax3.set_ylabel("汇率", fontsize=10)
     ax3.legend()
     ax3.grid(True)
     st.pyplot(fig3)
