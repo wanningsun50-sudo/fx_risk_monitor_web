@@ -1,107 +1,105 @@
-# main/app.py
-
+# main.py
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-import streamlit as st
+import numpy as np
 import warnings
-import matplotlib
-
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
 
-# ✅ 使用兼容 Streamlit Cloud 的中文字体（移除 SimHei）
-try:
-    matplotlib.rcParams['font.family'] = 'sans-serif'
-    matplotlib.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'Microsoft YaHei', 'Arial Unicode MS']
-    matplotlib.rcParams['axes.unicode_minus'] = False
-except Exception as e:
-    st.warning(f"⚠️ 字体设置失败：{e}")
+# 中文显示
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
 
-# ✅ Streamlit 页面开始
-st.set_page_config(page_title="外汇风险监测", layout="wide")
-st.title("📈 USD/CNY 外汇风险监测系统")
+def main():
+    print("📈 正在获取汇率数据...")
+    df = get_usdcny_last_week()
+    if df.empty:
+        print("❌ 数据为空，终止分析。")
+        return
 
-# 加载数据
-df = get_usdcny_last_week()
-if df.empty:
-    st.error("❌ 无法获取汇率数据，终止分析。")
-    st.stop()
+    print("⚙️ 正在计算波动率与风险...")
+    df_result, warning, latest_vol, threshold = compute_volatility(df)
 
-st.info("✅ 汇率数据加载成功，开始计算波动率与风险预警...")
+    print(f"\n📊 最新波动率（%）：{latest_vol:.4f}")
+    print(f"📉 预警阈值（滚动95%分位，%）：{threshold:.4f}")
+    print("🚨 风险预警：当前波动率高" if warning else "✅ 波动率正常")
 
-# 计算波动率
-df_result, warning, latest_vol, threshold = compute_volatility(df)
+    col_name = df_result.columns[0]
 
-# 展示当前风险状态
-st.subheader("📊 当前波动率分析")
-st.write(f"**最新波动率（%）:** `{latest_vol:.4f}`")
-st.write(f"**滚动95%分位阈值（%）:** `{threshold:.4f}`")
-if warning:
-    st.error("🚨 当前波动率高于阈值，触发风险预警！")
-else:
-    st.success("✅ 当前波动率正常，无风险预警。")
+    # 1) 汇率走势
+    plt.figure(figsize=(12, 4))
+    plt.plot(df_result.index, df_result[col_name], color='steelblue', label=col_name)
+    plt.title(f"{col_name} 汇率走势")
+    plt.xlabel("日期"); plt.ylabel("汇率"); plt.grid(True); plt.legend(); plt.tight_layout()
+    plt.show()
 
-# === 图1：汇率走势 ===
-col_name = df_result.columns[0]
-fig1, ax1 = plt.subplots(figsize=(12, 4))
-ax1.plot(df_result.index, df_result[col_name], label=col_name, color='steelblue')
-ax1.set_title(f"{col_name} 汇率走势")
-ax1.set_xlabel("日期")
-ax1.set_ylabel("汇率")
-ax1.grid(True)
-ax1.legend()
-st.pyplot(fig1)
+    # 2) 波动率趋势（单位：%）
+    vol_pct = df_result['volatility']
+    n = len(vol_pct)
+    win = max(20, min(60, n // 2))
+    minp = max(10, win // 2)
+    q95 = vol_pct.rolling(window=win, min_periods=minp).quantile(0.95)
 
-# === 图2：波动率趋势 ===
-vol_pct = df_result['volatility']
-n = len(vol_pct)
-win = max(20, min(60, n // 2))
-minp = max(10, win // 2)
-q95 = vol_pct.rolling(window=win, min_periods=minp).quantile(0.95)
-if q95.isna().all():
-    q95 = vol_pct.expanding(min_periods=10).quantile(0.95)
+    if q95.isna().all():
+        q95 = vol_pct.expanding(min_periods=10).quantile(0.95)
 
-fig2, ax2 = plt.subplots(figsize=(12, 4))
-ax2.plot(df_result.index, vol_pct, label='条件波动率 (%)', color='orange')
-ax2.plot(q95.index, q95.values, '--', label='滚动95%分位', color='red')
-ax2.set_title("USD/CNY 波动率趋势（单位：%）")
-ax2.set_xlabel("日期")
-ax2.set_ylabel("波动率 (%)")
-ax2.legend()
-ax2.grid(True)
-st.pyplot(fig2)
+    plt.figure(figsize=(12, 4))
+    plt.plot(df_result.index, vol_pct, label='条件波动率 (%)', color='orange', linewidth=2)
+    plt.plot(q95.index, q95.values, linestyle='--', color='red', linewidth=2, label='滚动95%分位')
+    plt.title(f"USD/CNY 波动率趋势（单位：%）｜当前波动率: {latest_vol:.2f}%｜阈值: {threshold:.2f}%")
+    plt.xlabel("日期")
+    plt.ylabel("波动率 (%)")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
-# === 图3：未来预测图 ===
-st.subheader("🔮 未来汇率预测")
-for steps in [5, 15]:
-    st.markdown(f"### 📈 未来 {steps} 天汇率预测")
+    # 3) 逐日滚动预测：未来 5 天 与 15 天
+    for steps in [5, 15]:
+        print(f"\n📈 正在逐日滚动预测未来 {steps} 天汇率...")
+        prices, upper, lower = forecast_future_prices_rolling(
+            df, steps=steps, alpha=0.05, dist_for_ci="t"
+        )
 
-    prices, upper, lower = forecast_future_prices_rolling(df, steps=steps, alpha=0.05, dist_for_ci="t")
+        # 用返回长度对齐日期
+        future_dates = pd.date_range(
+            start=df.index[-1] + pd.Timedelta(days=1),
+            periods=prices.shape[0], freq='D'
+        )
 
-    future_dates = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1),
-                                 periods=prices.shape[0], freq='D')
+        # 过滤非有限值，三者同步
+        mask = np.isfinite(prices) & np.isfinite(upper) & np.isfinite(lower)
+        future_dates = future_dates[mask]
+        prices = prices[mask]
+        upper = upper[mask]
+        lower = lower[mask]
 
-    mask = np.isfinite(prices) & np.isfinite(upper) & np.isfinite(lower)
-    prices, upper, lower, future_dates = prices[mask], upper[mask], lower[mask], future_dates[mask]
+        if prices.size == 0:
+            print("⚠️ 预测序列为空（或全是非有限值），本次绘图跳过。")
+            continue
 
-    if prices.size == 0:
-        st.warning(f"⚠️ 预测结果为空，跳过未来 {steps} 天预测。")
-        continue
+        # ✅ 在原代码内
+        plt.figure(figsize=(10, 5))
+        plt.plot(future_dates, prices, label='预测中枢', color='blue')
+        plt.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
 
-    fig3, ax3 = plt.subplots(figsize=(10, 5))
-    ax3.plot(future_dates, prices, label='预测中枢', color='blue')
-    ax3.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
-    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
-    for x, y in zip(future_dates, prices):
-        ax3.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
-    ax3.set_title(f"未来 {steps} 天 USD/CNY 逐日滚动预测")
-    ax3.set_xlabel("日期")
-    ax3.set_ylabel("汇率")
-    ax3.legend()
-    ax3.grid(True)
-    st.pyplot(fig3)
+        # ✅ 显示更多小数位
+        plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
+
+        # ✅ 在每个点上显示数值
+        for x, y in zip(future_dates, prices):
+            plt.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
+
+        plt.title(f'未来 {steps} 天 USD/CNY 逐日滚动预测（对数收益空间构造区间）')
+        plt.xlabel('日期')
+        plt.ylabel('汇率')
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout(pad=2)
+        plt.show()
 
 
+if __name__ == "__main__":
+    main()
