@@ -11,11 +11,13 @@ from garch_model import compute_volatility, forecast_future_prices_rolling
 
 import matplotlib
 import matplotlib.pyplot as plt
+import os
 
-# ✅ 推荐字体设置（兼容 Linux 上的 Streamlit Cloud）
-matplotlib.rcParams['font.family'] = 'sans-serif'
-matplotlib.rcParams['font.sans-serif'] = ['DejaVu Sans']  # 或者 'Arial Unicode MS'
-matplotlib.rcParams['axes.unicode_minus'] = False
+# ✅ 设置中文字体（Streamlit Cloud 推荐方式）
+font_path = os.path.join(os.path.dirname(__file__), 'simhei.ttf')  # 指向当前目录下的字体文件
+matplotlib.rcParams['font.family'] = matplotlib.font_manager.FontProperties(fname=font_path).get_name()
+matplotlib.rcParams['axes.unicode_minus'] = False  # 正常显示负号
+
 
 def main():
     print("📈 正在获取汇率数据...")
@@ -108,5 +110,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
