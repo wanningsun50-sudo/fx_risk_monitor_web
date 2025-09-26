@@ -1,16 +1,27 @@
 # main.py
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+import os
+import matplotlib
 
 from fx_data import get_usdcny_last_week
 from garch_model import compute_volatility, forecast_future_prices_rolling
 
-# 中文显示
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# ✅ 加载 simhei.ttf 中文字体（方案 B）
+try:
+    font_path = os.path.join(os.path.dirname(__file__), 'simhei.ttf')
+    font_prop = matplotlib.font_manager.FontProperties(fname=font_path)
+    plt.rcParams['font.family'] = font_prop.get_name()
+    plt.rcParams['axes.unicode_minus'] = False
+    print(f"✅ 已成功加载字体: {plt.rcParams['font.family']}")
+except Exception as e:
+    print(f"⚠️ 中文字体加载失败：{e}")
+    print("✅ 将继续使用默认字体（英文显示）")
 
 def main():
     print("📈 正在获取汇率数据...")
@@ -28,20 +39,23 @@ def main():
 
     col_name = df_result.columns[0]
 
-    # 1) 汇率走势
+    # === 图1：汇率走势 ===
     plt.figure(figsize=(12, 4))
     plt.plot(df_result.index, df_result[col_name], color='steelblue', label=col_name)
     plt.title(f"{col_name} 汇率走势")
-    plt.xlabel("日期"); plt.ylabel("汇率"); plt.grid(True); plt.legend(); plt.tight_layout()
+    plt.xlabel("日期")
+    plt.ylabel("汇率")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
     plt.show()
 
-    # 2) 波动率趋势（单位：%）
+    # === 图2：波动率趋势 ===
     vol_pct = df_result['volatility']
     n = len(vol_pct)
     win = max(20, min(60, n // 2))
     minp = max(10, win // 2)
     q95 = vol_pct.rolling(window=win, min_periods=minp).quantile(0.95)
-
     if q95.isna().all():
         q95 = vol_pct.expanding(min_periods=10).quantile(0.95)
 
@@ -56,39 +70,34 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # 3) 逐日滚动预测：未来 5 天 与 15 天
+    # === 图3：未来汇率预测 ===
     for steps in [5, 15]:
         print(f"\n📈 正在逐日滚动预测未来 {steps} 天汇率...")
         prices, upper, lower = forecast_future_prices_rolling(
             df, steps=steps, alpha=0.05, dist_for_ci="t"
         )
 
-        # 用返回长度对齐日期
         future_dates = pd.date_range(
             start=df.index[-1] + pd.Timedelta(days=1),
             periods=prices.shape[0], freq='D'
         )
 
-        # 过滤非有限值，三者同步
         mask = np.isfinite(prices) & np.isfinite(upper) & np.isfinite(lower)
-        future_dates = future_dates[mask]
         prices = prices[mask]
         upper = upper[mask]
         lower = lower[mask]
+        future_dates = future_dates[mask]
 
         if prices.size == 0:
             print("⚠️ 预测序列为空（或全是非有限值），本次绘图跳过。")
             continue
 
-        # ✅ 在原代码内
         plt.figure(figsize=(10, 5))
         plt.plot(future_dates, prices, label='预测中枢', color='blue')
         plt.fill_between(future_dates, lower, upper, alpha=0.1, label='置信区间', color='skyblue')
 
-        # ✅ 显示更多小数位
         plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.4f}"))
 
-        # ✅ 在每个点上显示数值
         for x, y in zip(future_dates, prices):
             plt.text(x, y, f"{y:.4f}", fontsize=8, ha='center', va='bottom', color='blue')
 
@@ -99,7 +108,6 @@ def main():
         plt.grid(True)
         plt.tight_layout(pad=2)
         plt.show()
-
 
 if __name__ == "__main__":
     main()
