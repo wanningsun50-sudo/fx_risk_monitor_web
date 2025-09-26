@@ -3,11 +3,8 @@ import pandas as pd
 from arch import arch_model
 from statsmodels.tsa.stattools import adfuller
 
-# ========= 自动模型选择（带保护） =========
+# ========= Auto model selection with validation =========
 def _select_best_model(y_pct: pd.Series):
-    from arch import arch_model
-    import numpy as np
-
     best_aic = np.inf
     best_bic = np.inf
     best_res = None
@@ -24,6 +21,7 @@ def _select_best_model(y_pct: pd.Series):
                         try:
                             mean_model = 'Zero' if lags == 0 else 'AR'
                             o = 1 if vol != 'GARCH' else 0
+
                             am = arch_model(
                                 y_pct,
                                 mean=mean_model,
@@ -37,25 +35,24 @@ def _select_best_model(y_pct: pd.Series):
                             )
                             res = am.fit(disp='off', show_warning=False)
 
-                            # 🛡️ 自由度检查
+                            # Check degrees of freedom
                             if dist in ['t', 'skewt']:
                                 nu = float(res.params.get("nu", 8.0))
                                 if nu < 2.5 or nu > 100:
                                     continue
 
-                            # 🛡️ 波动率合理性检查
+                            # Check volatility range
                             vol_series = res.conditional_volatility
                             if (vol_series < 1e-6).any() or (vol_series > 1e3).any():
                                 continue
 
-                            # ✅ NEW: 标准化残差限制
+                            # Check standardized residuals
                             resid = res.resid
                             std_resid = resid / (vol_series + 1e-8)
                             if np.abs(std_resid).max() > 100:
                                 continue
 
                             aic, bic = float(res.aic), float(res.bic)
-
                             is_better = False
                             if aic < best_aic - 1e-8:
                                 is_better = True
@@ -65,17 +62,18 @@ def _select_best_model(y_pct: pd.Series):
                             if is_better:
                                 best_aic, best_bic = aic, bic
                                 best_res = res
-                                best_spec = f"mean={mean_model}({lags}) + {vol}({p},{q},o={o})，dist={dist}"
+                                best_spec = f"mean={mean_model}({lags}) + {vol}({p},{q},o={o}), dist={dist}"
 
                         except Exception:
                             continue
 
     if best_res is None:
-        raise RuntimeError("自动模型选择失败，请检查数据或缩小搜索空间。")
+        raise RuntimeError("Model selection failed. Please check input data or reduce search space.")
 
     return best_res, (best_aic, best_bic, best_spec)
 
-# ========= 波动率计算（自动+阈值） =========
+
+# ========= Volatility computation and warning =========
 def compute_volatility(df: pd.DataFrame):
     col = df.columns[0]
     out = df[[col]].copy()
@@ -85,14 +83,14 @@ def compute_volatility(df: pd.DataFrame):
 
     try:
         adf_p = adfuller(out['log_return'])[1]
-        print(f"ADF p-value on returns = {adf_p:.4f}（<0.05 常见为平稳）")
+        print(f"ADF p-value on returns = {adf_p:.4f} (<0.05 usually indicates stationarity)")
     except Exception:
         adf_p = None
 
     y_pct = out['log_return'].astype(float)
 
     best_res, (aic, bic, spec) = _select_best_model(y_pct)
-    print(f"最佳模型: {spec} | AIC={aic:.2f}, BIC={bic:.2f}")
+    print(f"Selected model: {spec} | AIC={aic:.2f}, BIC={bic:.2f}")
 
     out['volatility_raw'] = best_res.conditional_volatility.astype(float)
     out['volatility'] = out['volatility_raw'].rolling(window=3, min_periods=1).mean()
@@ -108,10 +106,9 @@ def compute_volatility(df: pd.DataFrame):
     return out, warning, latest_vol, threshold
 
 
-# ========= 未来价格预测（逐日滚动 + 自动选模型） =========
+# ========= Rolling future price forecast =========
 def forecast_future_prices_rolling(df: pd.DataFrame, steps: int = 5, alpha: float = 0.05, dist_for_ci: str = "t"):
     from statistics import NormalDist
-
     try:
         from scipy.stats import t as t_dist, norm
         has_scipy = True
@@ -138,37 +135,14 @@ def forecast_future_prices_rolling(df: pd.DataFrame, steps: int = 5, alpha: floa
 
         try:
             res, (aic, bic, spec) = _select_best_model(log_return)
-            print(f"✅ 第 {i+1} 天选择模型: {spec}")
+            print(f"[Day {i+1}] Selected model: {spec}")
         except Exception as e:
-            print(f"❌ 第 {i+1} 天模型选择失败：{e}")
+            print(f"[Day {i+1}] Model selection failed: {e}")
             break
 
         forecast = res.forecast(horizon=1, reindex=False)
         mu = forecast.mean.iloc[-1, 0]
         sigma = np.sqrt(forecast.variance.iloc[-1, 0])
-        sigma = min(sigma, 20.0)
+        sigma = min(sigma, 20.0)  # cap for stability
 
-        dfree = float(res.params.get("nu", 8.0)) if (dist_for_ci == "t" and has_scipy) else None
-        z = _z(dfree)
-
-        mu = mu / 100.0
-        sigma = sigma / 100.0
-
-        prev_price = prices_history.iloc[-1]
-        pred_price = prev_price * np.exp(mu)
-        upper_price = prev_price * np.exp(mu + z * sigma)
-        lower_price = prev_price * np.exp(mu - z * sigma)
-
-        if not (5.5 <= pred_price <= 8.5):
-            print(f"⚠️ 第 {i+1} 天预测值异常：{pred_price:.4f}，终止后续预测")
-            break
-
-        preds.append(pred_price)
-        uppers.append(upper_price)
-        lowers.append(lower_price)
-
-        next_date = last_date + pd.Timedelta(days=1)
-        prices_history.loc[next_date] = pred_price
-        last_date = next_date
-
-    return np.array(preds), np.array(uppers), np.array(lowers)
+        dfree = flo
